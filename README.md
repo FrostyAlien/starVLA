@@ -151,19 +151,14 @@ We release a series of modified models and finetuning checkpoints to facilitate 
 ```bash
 # Clone the repo
 git clone https://github.com/starVLA/starVLA
+cd starVLA
 
-# Create conda environment
-conda create -n starVLA python=3.10 -y
-conda activate starVLA
+# Install via Pixi (https://pixi.sh)
+pixi install
 
-# Install requirements
-pip install -r requirements.txt
+# Run the environment
+pixi run python
 
-# Install FlashAttention2
-pip install flash-attn --no-build-isolation
-
-# Install starVLA
-pip install -e .
 ```
 
 

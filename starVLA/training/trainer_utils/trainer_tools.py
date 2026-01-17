@@ -60,6 +60,7 @@ def build_param_lr_groups(model, cfg):
     Returns:
         List[Dict]: param_groups that can be used to build optimizer with torch.optim
     """
+    print(model)
 
     lr_cfg = cfg.trainer.learning_rate
     base_lr = lr_cfg.get("base", 1e-4)  # default base learning rate
@@ -457,40 +458,94 @@ class TrainerUtils:
             print("No valid JSON part found")
             return None
 
-    def _get_latest_checkpoint(self, checkpoint_dir):
-        """Find the latest checkpoint in the directory based on step number."""
+    def _get_latest_checkpoint(self, checkpoint_dir, prefer_full_state: bool = True):
+        """
+        Find the latest checkpoint in the directory based on step number.
+
+        Preference order:
+          - If `prefer_full_state=True`:
+              1) Accelerate/DeepSpeed full-state checkpoint directories: `steps_<N>/`
+              2) Weights-only files: `steps_<N>_pytorch_model.pt`
+          - If `prefer_full_state=False`:
+              1) Weights-only files: `steps_<N>_pytorch_model.pt`
+              2) Checkpoint directories: `steps_<N>/`
+
+        Returns:
+            (path, steps): path is a directory (preferred) or a .pt file; steps is the parsed integer step.
+        """
         if not os.path.exists(checkpoint_dir):
             self.accelerator.print(f"No checkpoint directory found at {checkpoint_dir}")
             return None, 0
 
-        # 获取所有符合命名规则，确保只匹配以 .pt 结尾的文件
-        checkpoints = [
-            f for f in os.listdir(checkpoint_dir) 
-            if re.match(r"steps_(\d+)_pytorch_model\.pt$", f)  # 添加 $ 确保以 .pt 结尾
-            and os.path.isfile(os.path.join(checkpoint_dir, f))  # 确保是文件
-        ]
+        def _looks_like_accelerate_state(dir_path: str) -> bool:
+            if not os.path.isdir(dir_path):
+                return False
+            try:
+                entries = set(os.listdir(dir_path))
+            except OSError:
+                return False
 
-        if not checkpoints:
+            known_files = {
+                "optimizer.bin",
+                "optimizer.pt",
+                "scheduler.bin",
+                "scheduler.pt",
+                "pytorch_model.bin",
+                "pytorch_model.safetensors",
+                "model.safetensors",
+                "accelerator_state.json",
+                "accelerator_state.pt",
+                "scaler.pt",
+            }
+            if entries & known_files:
+                return True
+            if any(name.startswith("random_states_") for name in entries):
+                return True
+            # DeepSpeed-style shards
+            if any(name.endswith("_model_states.pt") for name in entries):
+                return True
+            return False
+
+        by_step = {}
+
+        # Discover `steps_<N>/` directories
+        for name in os.listdir(checkpoint_dir):
+            dir_path = os.path.join(checkpoint_dir, name)
+            match = re.match(r"steps_(\d+)$", name)
+            if not match or not os.path.isdir(dir_path):
+                continue
+            step = int(match.group(1))
+            entry = by_step.setdefault(step, {"dir_any": None, "dir_full": None, "file": None})
+            entry["dir_any"] = dir_path
+            if _looks_like_accelerate_state(dir_path):
+                entry["dir_full"] = dir_path
+
+        # Discover `steps_<N>_pytorch_model.pt` weights-only files
+        for name in os.listdir(checkpoint_dir):
+            file_path = os.path.join(checkpoint_dir, name)
+            match = re.match(r"steps_(\d+)_pytorch_model\.pt$", name)
+            if not match or not os.path.isfile(file_path):
+                continue
+            step = int(match.group(1))
+            entry = by_step.setdefault(step, {"dir_any": None, "dir_full": None, "file": None})
+            entry["file"] = file_path
+
+        if not by_step:
             self.accelerator.print(f"No checkpoints found in {checkpoint_dir}")
             return None, 0
 
-        # 提取步数并排序
-        try:
-            checkpoints_with_steps = [
-                (ckpt, int(re.search(r"steps_(\d+)_pytorch_model\.pt", ckpt).group(1)))
-                for ckpt in checkpoints
-            ]
-        except AttributeError as e:
-            self.accelerator.print(f"Error parsing checkpoint filenames: {e}")
-            return None, 0
+        latest_step = max(by_step.keys())
+        latest = by_step[latest_step]
 
-        # 按步数排序，获取最新的 checkpoint
-        checkpoints_with_steps.sort(key=lambda x: x[1])
-        latest_checkpoint, completed_steps = checkpoints_with_steps[-1]
+        if prefer_full_state:
+            # Prefer directory checkpoints first (full-state if detected), then weights-only file.
+            latest_path = latest["dir_full"] or latest["dir_any"] or latest["file"]
+        else:
+            # Prefer weights-only file first, then any directory.
+            latest_path = latest["file"] or latest["dir_full"] or latest["dir_any"]
 
-        latest_checkpoint_path = os.path.join(checkpoint_dir, latest_checkpoint)
-        self.accelerator.print(f"Latest checkpoint found: {latest_checkpoint_path}")
-        return latest_checkpoint_path, completed_steps
+        self.accelerator.print(f"Latest checkpoint found: {latest_path}")
+        return latest_path, latest_step
 
 import os
 

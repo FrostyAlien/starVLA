@@ -53,7 +53,7 @@ def get_frames_by_indices(
         if not TORCHCODEC_AVAILABLE:
             raise ImportError("torchcodec is not available.")
         decoder = torchcodec.decoders.VideoDecoder(
-            video_path, device="cpu", dimension_order="NHWC", num_ffmpeg_threads=0
+            video_path, device="cpu", dimension_order="NHWC", num_ffmpeg_threads=4
         )
         return decoder.get_frames_at(indices=indices).data.numpy()
     elif video_backend == "opencv":
@@ -103,9 +103,9 @@ def get_frames_by_timestamps(
         if not TORCHCODEC_AVAILABLE:
             raise ImportError("torchcodec is not available.")
         decoder = torchcodec.decoders.VideoDecoder(
-            video_path, device="cpu", dimension_order="NHWC", num_ffmpeg_threads=0
+            video_path, device="cpu", dimension_order="NHWC", num_ffmpeg_threads=4
         )
-        return decoder.get_frames_played_at(seconds=timestamps).data.numpy()
+        return decoder.get_frames_played_at(seconds=timestamps).data.cpu().numpy()
     elif video_backend == "opencv":
         # Open the video file
         cap = cv2.VideoCapture(video_path, **video_backend_kwargs)
@@ -212,10 +212,10 @@ def get_all_frames(
         if not TORCHCODEC_AVAILABLE:
             raise ImportError("torchcodec is not available.")
         decoder = torchcodec.decoders.VideoDecoder(
-            video_path, device="cpu", dimension_order="NHWC", num_ffmpeg_threads=0
+            video_path, device="cpu", dimension_order="NHWC", num_ffmpeg_threads=4
         )
         frames = decoder.get_frames_at(indices=range(len(decoder)))
-        return frames.data.numpy(), frames.pts_seconds.numpy()
+        return frames.data.cpu().numpy(), frames.pts_seconds.cpu().numpy()
     elif video_backend == "pyav":
         container = av.open(video_path)
         frames = []

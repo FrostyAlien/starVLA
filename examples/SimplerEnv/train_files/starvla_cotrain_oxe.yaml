@@ -107,6 +107,10 @@ trainer:
     weight_decay: 1.0e-08
 
   # parameters to be determined
+  # If true, saves Accelerator/DeepSpeed full state into `checkpoints/steps_<N>/` (keeps optimizer/scheduler LR on resume).
+  save_full_state_checkpoint: false
+  # If true, resumes from `checkpoints/steps_<N>/` using `accelerator.load_state()` (keeps original LR); otherwise uses weights-only.
+  resume_full_state_checkpoint: false
   is_resume: false
   resume_epoch: null
   resume_step: null

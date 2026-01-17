@@ -5,6 +5,10 @@
     "bf16": {
         "enabled": true
     },
+    "torch_autocast": {
+        "enabled": true,
+        "dtype": "bfloat16"
+    },
     "train_micro_batch_size_per_gpu": "auto",
     "train_batch_size": "auto",
     "gradient_accumulation_steps": 1,

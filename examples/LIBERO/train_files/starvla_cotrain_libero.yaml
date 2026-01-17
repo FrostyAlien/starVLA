@@ -73,7 +73,6 @@ datasets:
     obs: ["image_0"]
     video_backend: torchvision_av
 
-
 trainer:
   epochs: 100
   max_train_steps: 100000
@@ -105,8 +104,12 @@ trainer:
     weight_decay: 1.0e-08
 
   # parameters to be determined
+  # If true, saves Accelerator/DeepSpeed full state into `checkpoints/steps_<N>/` (keeps optimizer/scheduler LR on resume).
+  save_full_state_checkpoint: true
+  # If true, resumes from `checkpoints/steps_<N>/` using `accelerator.load_state()` (keeps original LR); otherwise uses weights-only.
+  resume_full_state_checkpoint: false
   is_resume: false
-  resume_epoch: null
-  resume_step: null
+  resume_epoch: 0
+  resume_step: 0
   enable_gradient_checkpointing: true
   enable_mixed_precision_training: true
